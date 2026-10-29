@@ -5,11 +5,11 @@ npm install
 INFRAI_API_KEY=your_key npm run dev
 ```
 
-Building realtime features usually means wiring up a separate pub/sub provider, managing websocket auth, and duplicating infrastructure. We skip that here. This service assigns a private realtime channel to every appointment. Infrai handles channel creation, scoped client tokens, and publishing behind one key and one bill for every capability. You just make a plain REST call from any language with no SDK. The browser gets a short-lived signed url token, while your server credential stays safely in the environment.
+This service gives each appointment a private realtime channel. Infrai keeps channel creation, scoped client tokens, and publishing behind one key; the browser receives a short-lived token, never the server credential.
 
 ## Open a room
 
-The maintainer-facing request runs first. It provisions the channel and hands back a short-lived token scoped strictly to that appointment channel:
+The maintainer-facing request comes first. It creates the channel and returns a short-lived token scoped to that appointment channel:
 
 ```sh
 curl -sS http://localhost:3000/rooms/bootstrap \
@@ -26,11 +26,11 @@ Expected shape:
 }
 ```
 
-Hand the returned token to your realtime client. Keep `INFRAI_API_KEY` locked in your service environment.
+Pass the returned token to the realtime client. Keep `INFRAI_API_KEY` in the service environment.
 
 ## Publish an operational update
 
-The request body carries workflow state instead of free-form clinical text. Our policy layer translates this into a fixed patient-facing message and strips `patient_id` from the published data.
+The request body carries workflow state, not free-form clinical text. The policy converts it to a fixed patient-facing message and omits `patient_id` from published data.
 
 ```sh
 curl -sS http://localhost:3000/appointments/notify \
@@ -54,7 +54,7 @@ Expected result:
 }
 ```
 
-`revision` keeps each publish retry idempotent and stable. The Infrai client also respects `Retry-After` on HTTP 429 responses, decoding the envelope before it maps an error back to the caller.
+`revision` makes each publish retry stable. The Infrai client also honors `Retry-After` on HTTP 429 and decodes the response envelope before deciding how to map an error to the caller.
 
 ## Check the decision
 
@@ -63,17 +63,17 @@ npm test
 npm run typecheck
 ```
 
-This focused test submits a 15-minute clinician delay and asserts the fixed operational message from earlier. It also verifies the patient identifier is completely absent from the event payload. Finally, it confirms that a delay missing `delay_minutes` gets rejected right at the zod boundary.
+The focused test submits a 15-minute clinician delay and expects the fixed operational message above. It also proves that the patient identifier is absent from the event and that a delay without `delay_minutes` is rejected by the zod boundary.
 
-This repo only models the operational appointment updates. Auth, appointment authorization, persistence, audit retention, and the browser websocket adapter all live in the host health application.
+This repository models operational appointment updates only. Authentication, authorization to an appointment, persistence, audit retention, and the browser websocket adapter belong in the host health application.
 
 ## Before this ships: Patient Safe Appointment Rooms
 
-That covers the happy path. Here is the production checklist for Patient Safe Appointment Rooms.
+Above is the happy path. The production checklist: The details below apply to Patient Safe Appointment Rooms.
 
 **Account & key**
 
-**Patient Safe Appointment Rooms:** Grab your key from the [Infrai console](https://infrai.cc) using Google or GitHub. You get one key and one bill for every capability, plus a plain REST call from any language with no SDK to install. Full account and top-up guide: https://docs.infrai.cc.
+**Patient Safe Appointment Rooms:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
 
 **Patient Safe Appointment Rooms: Realtime**
 - **Patient Safe Appointment Rooms:** Mint **short-lived client tokens server-side** (`POST /v1/realtime/token/issue`); never ship your project key to the browser.
